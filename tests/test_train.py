@@ -2,10 +2,12 @@ import pytest
 from pyannote.database import FileFinder, get_protocol
 from pytorch_lightning import Trainer
 
+from pyannote.audio.models.embedding.debug import SimpleEmbeddingModel
 from pyannote.audio.models.segmentation.debug import SimpleSegmentationModel
 from pyannote.audio.tasks import (
     OverlappedSpeechDetection,
     Segmentation,
+    SpeakerEmbedding,
     VoiceActivityDetection,
 )
 
@@ -34,6 +36,13 @@ def test_train_voice_activity_detection(protocol):
 def test_train_overlapped_speech_detection(protocol):
     overlapped_speech_detection = OverlappedSpeechDetection(protocol)
     model = SimpleSegmentationModel(task=overlapped_speech_detection)
+    trainer = Trainer(fast_dev_run=True)
+    trainer.fit(model)
+
+
+def test_train_speaker_embedding(protocol):
+    speaker_embedding = SpeakerEmbedding(protocol)
+    model = SimpleEmbeddingModel(task=speaker_embedding)
     trainer = Trainer(fast_dev_run=True)
     trainer.fit(model)
 

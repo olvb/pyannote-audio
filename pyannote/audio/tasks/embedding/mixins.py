@@ -23,6 +23,7 @@
 import math
 from typing import Dict, Optional, Sequence, Union
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from pyannote.core import Segment
@@ -30,6 +31,7 @@ from pyannote.database.protocol import (
     SpeakerDiarizationProtocol,
     SpeakerVerificationProtocol,
 )
+from torch.utils.data._utils.collate import default_collate
 from torchmetrics import AUROC, Metric
 from tqdm import tqdm
 
@@ -208,6 +210,55 @@ class SupervisedRepresentationLearningTaskMixin:
                     if num_samples == self.batch_size:
                         batch_duration = rng.uniform(self.min_duration, self.duration)
                         num_samples = 0
+
+    def collate_X(self, batch) -> torch.Tensor:
+        return default_collate([b["X"] for b in batch])
+
+    def collate_y(self, batch) -> torch.Tensor:
+        y = np.fromiter((b["y"] for b in batch), dtype=np.int64)
+        return torch.from_numpy(y)
+
+    def adapt_y(self, collated_y: torch.Tensor) -> torch.Tensor:
+        return collated_y
+
+    def collate_fn(self, batch, stage="train"):
+        """Collate function used for embedding tasks
+
+        This function does the following:
+        * stack waveforms into a (batch_size, num_channels, num_samples) tensor batch["X"])
+        * apply augmentation when in "train" stage
+        * convert targets into a (batch_size, ) tensor batch["y"]
+
+        Parameters
+        ----------
+        batch : list of dict
+            List of training samples.
+
+        Returns
+        -------
+        batch : dict
+            Collated batch as {"X": torch.Tensor, "y": torch.Tensor} dict.
+        """
+
+        # collate X
+        collated_X = self.collate_X(batch)
+
+        # collate y
+        collated_y = self.collate_y(batch)
+
+        # apply augmentation (only in "train" stage)
+        self.augmentation.train(mode=(stage == "train"))
+        augmented = self.augmentation(
+            samples=collated_X,
+            sample_rate=self.model.hparams.sample_rate,
+            # torch-audiomentations expects 4D shape
+            targets=collated_y.reshape(-1, 1, 1, 1),
+        )
+
+        return {
+            "X": augmented.samples,
+            "y": self.adapt_y(augmented.targets.reshape(-1)),
+        }
 
     def train__len__(self):
         duration = sum(
