@@ -131,11 +131,6 @@ class SegmentationTaskMixin:
         num_classes = len(self.specifications.classes)
         return AUROC(num_classes, pos_label=1, average="macro", compute_on_step=False)
 
-    def adapt_y(self, one_hot_y: np.ndarray) -> np.ndarray:
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement the `adapt_y` method."
-        )
-
     def prepare_chunk(
         self,
         file: AudioFile,
